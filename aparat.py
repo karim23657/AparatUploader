@@ -35,8 +35,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 class ChunkedUpload:
-    def __init__(self, url, token, qquuid, filename, max_byte_length=1024*1024*3, progress_callback=None):
+    def __init__(self, url, token, qquuid, filename, max_byte_length=1024*1024*3, progress_callback=None ,num_workers=3):
         self.url = url
+        self.session = session
         self.filename = filename
         self.file_size = os.path.getsize(filename)
         self.max_byte_length = max_byte_length
@@ -44,10 +45,11 @@ class ChunkedUpload:
         self.sent_chunk_count = 0
         self.token = token 
         self.videopath = filename
-        self.videoExt= str(self.videopath.rsplit(".", 1)[-1])
-        self.videoMime = what_the_mime(self.videoExt)
-        self.videoName='test.'+self.videoExt
+        self.videoExt = str(self.videopath.rsplit(".", 1)[-1])
+        self.videoMime = what_the_mime('.'+self.videoExt)
+        self.videoName = 'test.' + self.videoExt
         self.qquuid = qquuid
+        self.num_workers = num_workers
         
         self.chunk_list = [(start, min(start + self.max_byte_length, self.file_size)) for start in range(0, self.file_size, self.max_byte_length)]
         self.totalparts = len(self.chunk_list)
@@ -70,41 +72,48 @@ class ChunkedUpload:
             file.seek(start)
             chunk_data = file.read(end - start)
 
-            data = {
-                "qqpartindex": self.sent_chunk_count,
-                "qqchunksize": self.max_byte_length,
-                "qqpartbyteoffset": start,
-                "qqtotalfilesize": self.file_size,
-                "qqtype":self.videoMime,
-                "qquuid":self.qquuid,
-                "qqfilename":self.videoName,
-                "qqfilepath":self.videoName,
-                "qqtotalparts": self.totalparts,
-            }
-            files = {'qqfile': chunk_data}
-            response = requests.post(self.url+'/upload', data=data, files=files,headers=self.headers, verify=False)
+        chunk_size = min(end - start, self.max_byte_length)
+        data = {
+            "qqpartindex": self.sent_chunk_count,
+            "qqchunksize": chunk_size,
+            "qqpartbyteoffset": start,
+            "qqtotalfilesize": self.file_size,
+            "qqtype": self.videoMime,
+            "qquuid": self.qquuid,
+            "qqfilename": self.videoName,
+            "qqfilepath": self.videoName,
+            "qqtotalparts": self.totalparts,
+        }
+        self.sent_chunk_count += 1
+        print("|> snt data:", data)
+        files = {'qqfile': chunk_data}
+        response = self.session.post(self.url + '/upload', data=data, files=files, headers=self.headers, verify=False)
 
-            if response.status_code != 200:
-                raise Exception("Upload failed with status code {}".format(response.status_code))
+        if response.status_code != 200:
+            raise Exception("Upload failed with status code {}".format(response.status_code))
+        else:
+            print(self.sent_chunk_count, response.text)
+            ssss= start
 
-            if self.progress_callback:
-                progress = (start + self.max_byte_length) / self.file_size
-                self.progress_callback(progress)
-            
-            self.sent_chunk_count += 1
+        if self.progress_callback:
+            progress = (start + self.max_byte_length) / self.file_size
+            self.progress_callback(progress)
+        
+        
 
     def upload(self):
-        with ThreadPoolExecutor(max_workers = 3) as executor:
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:  # Increase the max_workers value
             list(executor.map(self.upload_chunk, self.chunk_list))
             
-            data = {
-                'qquuid': self.qquuid,
-                'qqfilename': self.videoName,
-                'qqtotalfilesize': self.file_size,
-                'qqtotalparts': self.totalparts,
-            }
-            response = requests.post(self.url+'/chunksdone', data=data,headers=self.headers, verify=False) 
-
+        response = self.session.get(self.url + '/file/' + self.qquuid, verify=False)
+        print("|> Ax1:", response.text)
+        data = {
+            'qquuid': self.qquuid,
+            'qqfilename': self.videoName,
+            'qqtotalfilesize': self.file_size,
+            'qqtotalparts': self.totalparts,
+        }
+        response = self.session.post(self.url + '/chunksdone', data=data, headers=self.headers, verify=False)
 
 import json
 import uuid
