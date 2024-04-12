@@ -32,12 +32,14 @@ def parseCookieFile(cookiefile):
 
 
 import os
-from concurrent.futures import ThreadPoolExecutor
+from resumable import Resumable
+
 
 class ChunkedUpload:
-    def __init__(self, url, token, qquuid, filename, max_byte_length=1024*1024*3, progress_callback=None ,num_workers=3):
+    def __init__(self, url, token, qquuid, filename, max_byte_length=1024*1024*3, progress_callback=None):
+        print('|> aa:',[url, token, qquuid, filename, max_byte_length])
         self.url = url
-        self.session = session
+        self.session = requests.Session()
         self.filename = filename
         self.file_size = os.path.getsize(filename)
         self.max_byte_length = max_byte_length
@@ -46,11 +48,8 @@ class ChunkedUpload:
         self.token = token 
         self.videopath = filename
         self.videoExt = str(self.videopath.rsplit(".", 1)[-1])
-        self.videoMime = what_the_mime('.'+self.videoExt)
         self.videoName = 'test.' + self.videoExt
         self.qquuid = qquuid
-        self.num_workers = num_workers
-        
         self.chunk_list = [(start, min(start + self.max_byte_length, self.file_size)) for start in range(0, self.file_size, self.max_byte_length)]
         self.totalparts = len(self.chunk_list)
         self.headers = {
@@ -66,45 +65,18 @@ class ChunkedUpload:
             'Sec-Fetch-Site': 'same-site'
         }
         
-    def upload_chunk(self, chunk):
-        start, end = chunk
-        with open(self.filename, 'rb') as file:
-            file.seek(start)
-            chunk_data = file.read(end - start)
 
-        chunk_size = min(end - start, self.max_byte_length)
-        data = {
-            "qqpartindex": self.sent_chunk_count,
-            "qqchunksize": chunk_size,
-            "qqpartbyteoffset": start,
-            "qqtotalfilesize": self.file_size,
-            "qqtype": self.videoMime,
-            "qquuid": self.qquuid,
-            "qqfilename": self.videoName,
-            "qqfilepath": self.videoName,
-            "qqtotalparts": self.totalparts,
-        }
-        self.sent_chunk_count += 1
-        print("|> snt data:", data)
-        files = {'qqfile': chunk_data}
-        response = self.session.post(self.url + '/upload', data=data, files=files, headers=self.headers, verify=False)
-
-        if response.status_code != 200:
-            raise Exception("Upload failed with status code {}".format(response.status_code))
-        else:
-            print(self.sent_chunk_count, response.text)
-            ssss= start
-
-        if self.progress_callback:
-            progress = (start + self.max_byte_length) / self.file_size
-            self.progress_callback(progress)
-        
-        
 
     def upload(self):
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:  # Increase the max_workers value
-            list(executor.map(self.upload_chunk, self.chunk_list))
-            
+        with Resumable(
+            target=self.url + '/upload',
+            chunk_size=self.max_byte_length,
+            simultaneous_uploads=3,
+            headers=self.headers,
+        ) as session:
+            file = session.add_file(self.filename,self.qquuid)
+            file.chunk_completed.register(self.progress_callback)
+        
         response = self.session.get(self.url + '/file/' + self.qquuid, verify=False)
         print("|> Ax1:", response.text)
         data = {
@@ -115,17 +87,15 @@ class ChunkedUpload:
         }
         response = self.session.post(self.url + '/chunksdone', data=data, headers=self.headers, verify=False)
 
+
+
+
+
+
 import json
 import uuid
 import math
 import time
-
-
-def what_the_mime(extn):
-    allmimes=[{"ext": "video/x-matroska","mime": ".mkv"},{"ext": "video/3gpp","mime": ".3gp"},{"ext": "video/mp4","mime": ".mp4"},{"ext": "video/mp4","mime": ".m4p"},{"ext": "video/mp4","mime": ".m4b"},{"ext": "video/mp4","mime": ".m4r"},{"ext": "video/mp4","mime": ".m4v"},{"ext": "video/mpeg","mime": ".m1v"},{"ext": "video/ogg","mime": ".ogg"},{"ext": "video/quicktime","mime": ".mov"},{"ext": "video/quicktime","mime": ".qt"},{"ext": "video/webm","mime": ".webm"},{"ext": "video/x-m4v","mime": ".m4v"},{"ext": "video/ms-asf","mime": ".asf"},{"ext": "video/ms-asf","mime": ".wma"},{"ext": "video/x-ms-wmv","mime": ".wmv"},{"ext": "video/x-msvideo","mime": ".avi"}]
-    for x in allmimes:
-        if x['mime']==extn:
-            return x['ext']
 
 
 
@@ -150,7 +120,7 @@ class AparatUploader():
             'Sec-Fetch-Site': 'same-origin',
             'Sec-Fetch-User': '?1',
         }
-        other_auth_data= parseCookieFile('cookies.txt')
+        other_auth_data= parseCookieFile(cookieJar)
         self.cookies = {
             'AuthV1': other_auth_data['AuthV1'],
             '_ga': other_auth_data['_ga'],
@@ -209,13 +179,14 @@ class AparatUploader():
     
     def upload_video(self,videopath, progress_callback=None):
         self._get_upload_info()
-        u = ChunkedUpload( self.server_url, 
-                          self.uploadinfo['data'][0]['attributes']['token'], 
-                          self.qquuid, 
-                          videopath, 
-                          self.max_byte_length, 
-                          progress_callback
-                         )
+        
+        u = ChunkedUpload(url=self.server_url, 
+                          token=self.uploadinfo['data'][0]['attributes']['token'], 
+                          qquuid=self.qquuid, 
+                          filename=videopath, 
+                          max_byte_length=self.max_byte_length, 
+                          progress_callback=progress_callback
+                         ) 
         u.upload()
     def upload(self ,
                videopath,
@@ -244,21 +215,19 @@ class AparatUploader():
             "uploadId": self.uploadinfo['data'][0]['attributes']['uploadId'],
             "upload_base_url": self.server_url,
             "video": self.qquuid,
-            "video_pass": 1,
-            "watermark": "yes",
-            "watermark_bool": True,
+            "video_pass": "1",
+            "watermark": "1",
             "category": "5",
             "comment": "yes",
-            "kids_friendly": False,
+            "kids_friendly": True,
             "title": title,
             "descr": description,
             "tags": "مستند-آموزشی-برچسب",
             "new_playlist": "",
             "playlist_temp": "",
-            "playlistid": [],
-            "subtitle": [],
-            "subtitle_temp": [],
-            "publish_date": None
+            "playlistid": "",
+            "subtitle": "",
+            "publish_date": ""
         }
     
         response = requests.post('https://www.aparat.com/api/fa/v1/video/upload/upload/uploadId/'+self.uploadinfo['data'][0]['attributes']['uploadId'], data=json.dumps(data), cookies=self.cookies, headers=headers, verify=False)
