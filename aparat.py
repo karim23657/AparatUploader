@@ -32,7 +32,7 @@ def parseCookieFile(cookiefile):
 
 
 import os
-from resumable import Resumable
+from .resumable import Resumable
 
 
 class ChunkedUpload:
