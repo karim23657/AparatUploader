@@ -117,4 +117,4 @@ class ResumableFile(object):
         if self.is_completed:
             self.completed.trigger()
             self.close()
-        self.chunk_completed.trigger(chunk)
+        self.chunk_completed.trigger(chunk,self.fraction_completed)
