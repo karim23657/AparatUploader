@@ -37,7 +37,7 @@ from resumable import Resumable
 
 class ChunkedUpload:
     def __init__(self, url, token, qquuid, filename, max_byte_length=1024*1024*3, progress_callback=None):
-        print('|> aa:',[url, token, qquuid, filename, max_byte_length])
+        # print('|> aa:',[url, token, qquuid, filename, max_byte_length])
         self.url = url
         self.session = requests.Session()
         self.filename = filename
@@ -78,7 +78,7 @@ class ChunkedUpload:
             file.chunk_completed.register(self.progress_callback)
         
         response = self.session.get(self.url + '/file/' + self.qquuid, verify=False)
-        print("|> Ax1:", response.text)
+        # print("|> Ax1:", response.text)
         data = {
             'qquuid': self.qquuid,
             'qqfilename': self.videoName,
@@ -171,10 +171,10 @@ class AparatUploader():
         self.qquuid=qquuid
         data = {"uploadIds":[self.qquuid],"upload_base_url":self.server_url,"upload_cnt":1}
         response =  requests.post('https://www.aparat.com/api/fa/v1/video/upload/upload_url',data=json.dumps(data), cookies=self.cookies, headers=headers1,verify=False)
-        print(">>>> data:",data)
-        print(">>>> data:",json.dumps(data))
+        # print(">>>> data:",data)
+        # print(">>>> data:",json.dumps(data))
         self.uploadinfo=json.loads(response.text  )
-        print(">>>> uploadinfo:",self.uploadinfo)
+        # print(">>>> uploadinfo:",self.uploadinfo)
         return self.uploadinfo
     
     def upload_video(self,videopath, progress_callback=None):
