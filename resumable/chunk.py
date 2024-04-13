@@ -72,8 +72,8 @@ def _send_chunk(session, config, file, chunk):
     if response.status_code in config.permanent_errors:
         # TODO: better exception
         raise ResumableError('permanent error')
-    print('|> ',data_toPost)
-    print(response.text)
+    # print('|> ',data_toPost)
+    # print(response.text)
     return response.status_code in [200, 201]
 
 
