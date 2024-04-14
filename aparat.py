@@ -1,5 +1,11 @@
 import re, requests
-
+from .resumable import Resumable
+import base64
+import os
+import json
+import uuid
+import math
+import time
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
@@ -30,9 +36,25 @@ def parseCookieFile(cookiefile):
 
 
 
+def path_to_data_url(image_path):
+    filename, ext = os.path.splitext(image_path)
+    if ext.lower() not in ['.png', '.jpg', '.jpeg']:
+        raise ValueError(f'Invalid image format: {ext}')
 
-import os
-from .resumable import Resumable
+    with open(image_path, 'rb') as f:
+        image_data = f.read()
+    
+    image_base64 = base64.b64encode(image_data).decode()
+
+    if ext.lower() == '.png':
+        mime_type = 'image/png' 
+    else:
+        mime_type = 'image/jpeg'
+
+    data_url = f'data:{mime_type};base64,{image_base64}'
+    return data_url
+
+
 
 
 class ChunkedUpload:
@@ -92,10 +114,6 @@ class ChunkedUpload:
 
 
 
-import json
-import uuid
-import math
-import time
 
 
 
@@ -132,6 +150,22 @@ class AparatUploader():
             '_clck': other_auth_data['_clck'],
             'lang': 'fa',
             '_ym_isad': '1',
+        }
+        self.headers_edit = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.aparat.com/uploadvideo',
+            'Content-Type': 'application/json; charset=utf-8',
+            'isNext': 'true',
+            'jsonType': 'simple',
+            'domain': 'aparat',
+            'currentUrl': 'https://www.aparat.com/uploadvideo',
+            'Origin': 'https://www.aparat.com',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
         }
         
     def _get_upload_info(self):
@@ -192,24 +226,11 @@ class AparatUploader():
                videopath,
                title="عنوان",
                description="توضیخات",
-               progress_callback=None):
+               progress_callback=None,
+               **kwargs
+              ):
         self.upload_video(videopath, progress_callback)
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.aparat.com/uploadvideo',
-            'Content-Type': 'application/json; charset=utf-8',
-            'isNext': 'true',
-            'jsonType': 'simple',
-            'domain': 'aparat',
-            'currentUrl': 'https://www.aparat.com/uploadvideo',
-            'Origin': 'https://www.aparat.com',
-            'Connection': 'keep-alive',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
-        }
+        
 
         data = {
             "uploadId": self.uploadinfo['data'][0]['attributes']['uploadId'],
@@ -229,9 +250,64 @@ class AparatUploader():
             "subtitle": "",
             "publish_date": ""
         }
-    
-        response = requests.post('https://www.aparat.com/api/fa/v1/video/upload/upload/uploadId/'+self.uploadinfo['data'][0]['attributes']['uploadId'], data=json.dumps(data), cookies=self.cookies, headers=headers, verify=False)
+        
+        for key, value in data.items():
+            if key not in kwargs:
+                kwargs[key] = value
+            elif isinstance(kwargs[key], str) and isinstance(value, int):
+                kwargs[key] = str(value)
+        if kwargs['thumbnail'] :
+            kwargs['thumbnail-file']="C:\\fakepath\\in99dex.jpg"
+        # print(data)
+        # print(kwargs)
+        response = requests.post('https://www.aparat.com/api/fa/v1/video/upload/upload/uploadId/'+self.uploadinfo['data'][0]['attributes']['uploadId'], data=json.dumps(kwargs), cookies=self.cookies, headers=self.headers_edit, verify=False)
         
         return json.loads(response.text  )
+    def get_uploaded_video_info(self,videoHash):
+        response = requests.get(
+            'https://www.aparat.com/api/fa/v1/video/video/show/videohash/'+videoHash+'?pr=1&mf=1',
+            cookies=self.cookies,
+            headers=self.headers_edit,
+        )
+        return json.loads(response.text  )
+    def update_video_data(self,videoHash,**kwargs): 
+        viddata=self.get_uploaded_video_info(videoHash)
+        predefined_values = {
+        'title':viddata['data']['title'],
+        'descr':viddata['data']['description'],
+        'kids_friendly':viddata['data']['kids_friendly'],
+        'new_playlist':None,
+        'playlistid':viddata['data'].get('playList', {}).get('data', {}).get('id', None),
+        'publish_date':None,
+        'video_id':viddata['data']['id'],
+        'video_pass':viddata['data'].get('video_pass', '') != '', # True : not to share
+        'comment': viddata['data']['comment_enable'],
+        'category': viddata['data']['category']['id'],
+        'tags':'-'.join(viddata['data']['tags'])
+        }
+        for key, value in predefined_values.items():
+            if key not in kwargs:
+                kwargs[key] = value
+            elif isinstance(kwargs[key], str) and isinstance(value, int):
+                kwargs[key] = str(value)
+        response = requests.post('https://www.aparat.com/api/fa/v1/video/video/edit/videohash/'+videoHash,
+                             cookies=self.cookies,
+                             headers=self.headers_edit,
+                             data=json.dumps(kwargs),
+                            )
+        return json.loads(response.text  )
+    def set_thumbnail(self,video_Id,image_data_url,isFilePath=False):
+        if(isFilePath):
+            image_data_url = path_to_data_url(image_data_url)
+        data = {"image":image_data_url}
+        response =  requests.post('https://www.aparat.com/api/fa/v1/video/video/mainpic_upload/videohash/'+video_Id,
+                          data=json.dumps(data), 
+                          cookies=self.cookies, 
+                          headers=self.headers_edit,
+                          verify=False)
+        return json.loads(response.text  )
+
+
+
 
        
