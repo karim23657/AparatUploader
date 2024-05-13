@@ -256,7 +256,7 @@ class AparatUploader():
                 kwargs[key] = value
             elif isinstance(kwargs[key], str) and isinstance(value, int):
                 kwargs[key] = str(value)
-        if kwargs['thumbnail'] :
+        if kwargs.get('thumbnail') :
             kwargs['thumbnail-file']="C:\\fakepath\\in99dex.jpg"
         # print(data)
         # print(kwargs)
