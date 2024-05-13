@@ -9,7 +9,7 @@ clone repo :
 git clone https://github.com/karim23657/AparatUploader
 ```
 
-You need `cookies.txt` from your aparat account (use cookies.txt browser extention) :
+You need `cookies.txt` from your aparat account ( use cookies.txt browser extention [github](https://github.com/hrdl-github/cookies-txt) , [firefox](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/) , [chrome](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) - go to https://www.aparat.com/dashboard and then export cookies):
 ```python
 from AparatUploader.aparat import AparatUploader
 ap = AparatUploader('cookies.txt')
@@ -25,3 +25,5 @@ ap.upload(
     progress_callback=display_prog
 )
 ```
+
+
