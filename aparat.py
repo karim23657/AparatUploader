@@ -168,21 +168,8 @@ class AparatUploader():
             'Sec-Fetch-Site': 'same-origin',
         }
         
-    def _get_upload_info(self):
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.aparat.com/uploadvideo',
-            'isNext': 'true',
-            'jsonType': 'simple',
-            'domain': 'aparat',
-            'currentUrl': 'https://www.aparat.com/uploadvideo',
-            'Connection': 'keep-alive',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
-        }
+    def get_upload_config(self):
+        
         headers1 = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
         'Accept': 'application/json, text/javascript, */*; q=0.01',
@@ -197,9 +184,28 @@ class AparatUploader():
         'Sec-Fetch-Site': 'same-origin',
         }
         
-        response =  requests.get('https://www.aparat.com/api/fa/v1/video/upload/upload_config', cookies=self.cookies, headers=headers,verify=False)
+        response =  requests.get('https://www.aparat.com/api/fa/v1/video/upload/upload_config', cookies=self.cookies, headers=self.headers_edit,verify=False)
         uploadinfo_1=json.loads(response.text  )
-        # print(response.text)
+        self.upload_config = uploadinfo_1;    
+        return uploadinfo_1
+    def _get_upload_info(self):
+        
+        headers1 = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://www.aparat.com/upload',
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://www.aparat.com',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        }
+        
+        uploadinfo_1=self.get_upload_config()
+        self.upload_config = uploadinfo_1;
         qquuid=str(uuid.uuid4())
         self.server_url=uploadinfo_1['data']['server']
         self.qquuid=qquuid
